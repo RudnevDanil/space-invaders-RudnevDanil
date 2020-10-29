@@ -6,7 +6,7 @@ import InputHandler from './input-handler'
 
 import assetPath from '../assets/invaders.png'
 
-let gs = {
+let gs = { // game state. Dont change! It isn't a settings!
     seconds:{
         aShoot: 0,
     },
@@ -16,21 +16,25 @@ let gs = {
 }
 
 let settings = {
-    lineW: 6,
-    headerSize: 50,
-    footerSize: 50,
+    lineW: 6, // width of background line
+    headerSize: 50, // top offset in background
+    footerSize: 50, // bottom offset in background
     alien: {
-        alienTypes: [1, 0, 1, 2, 0, 2],
-        inOneLine: 11,
-        shootTime: 1,
-        size: 33
+        alienTypes: [1, 0, 1, 2, 0, 2], // types numbers in each line
+        inOneLine: 11, // pcs // amount of alien in one line. It means amount rows
+        shootTime: 1, // sec // each shootTime lower of aliens are shoot
+        size: 33, // px // size of one alien
+        shootProbability: 0.1, // probability of alien shooting
+        BulletMult: 300, // amount steps like a speed
     },
     cannon: {
-        step: 4,
+        step: 4, // px // each tep of <- or -> move cannon on step px
+        baseBulletSpeed: 8,
+        bulletSpeedProbabilityRange: 0.2,
     }
 }
 
-let safeArea = {
+let safeArea = { // will be set after
     l: 0,
     t: 0,
     r: 0,
@@ -92,7 +96,7 @@ export function init(canvas)
 function timer_tictoc()
 {
     gs.seconds.aShoot += 1;
-    if(gs.seconds.aShoot === settings.alien.shootTime)
+    if(gs.seconds.aShoot === settings.alien.shootTime && gs.lives > 0)
     {
         aliensStartShoot()
         gs.seconds.aShoot = 0
@@ -113,7 +117,7 @@ export function update(time, stopGame)
     // Right
     potentialX = objs.cannon.x + settings.cannon.step
 	if (inputHandler.isDown(39) &&
-        potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r)
+        potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l)
     {
         objs.cannon.x = potentialX;
 	}
@@ -121,12 +125,80 @@ export function update(time, stopGame)
     // Space
     if (inputHandler.isPressed(32))
     {
-        const bulletX = objs.cannon.x + 10;
+        const bulletX = objs.cannon.x +  Math.floor(objs.cannon._sprite.h / 2);
         const bulletY = objs.cannon.y;
-        objs.bullets.push(new Bullet(bulletX, bulletY,0,  -8, 4, 8, "green"));
+        const bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2)
+        objs.bullets.push(new Bullet(bulletX, bulletY,0,  bulletVy, 4, 8, "green"));
     }
 
     objs.bullets.forEach(b => b.update(time));
+
+    checkBulletIntersection()
+    checkAreBulletsInSafeArea()
+}
+
+function checkAreBulletsInSafeArea()
+{
+    for(let i = 0; i < objs.bullets.length; i++)
+    {
+        if (objs.bullets[i].x < safeArea.l ||
+            objs.bullets[i].x > safeArea.r ||
+            objs.bullets[i].y < safeArea.t ||
+            objs.bullets[i].y > safeArea.b + safeArea.t)
+        {
+            //delete objs.bullets[i];
+            objs.bullets.splice(i,1);
+        }
+    }
+}
+
+function checkBulletIntersection()
+{
+    for(let i = 0; i < objs.bullets.length; i++)
+    {
+        if (objs.bullets[i].color == "white")
+        {
+            checkCannonOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy)
+        }
+        else if(objs.bullets[i].color == "green")
+        {
+            checkAlienOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy)
+        }
+    }
+}
+
+function checkAlienOnLine(ax, ay, bx ,by)
+{
+    
+}
+
+function checkCannonOnLine(ax, ay, bx ,by)
+{
+    // if cannon on line player shouted
+    if(gs.lives <= 0)
+    {
+        stopGame()
+    }
+    else
+    {
+        gs.lives -= 1
+    }
+}
+
+function stopGame()
+{
+    objs.bullets.forEach(b => {
+        b.vx = 0;
+        b.vy = 0;
+    });
+
+    objs.aliens.forEach(a =>  {
+        a.vx = 0;
+        a.vy = 0;
+    });
+
+    objs.cannon.vx = 0;
+    objs.cannon.vy = 0;
 }
 
 function showSafeAreaZone(ctx) // debug
@@ -134,11 +206,11 @@ function showSafeAreaZone(ctx) // debug
     ctx.beginPath();
     ctx.lineWidth = 1;
     ctx.strokeStyle = "red"
-    ctx.strokeRect(safeArea.l, safeArea.t, safeArea.r + safeArea.l, safeArea.b + safeArea.t);
+    ctx.strokeRect(safeArea.l, safeArea.t, safeArea.r, safeArea.b);
     ctx.closePath();
 }
 
-function draw_background(ctx, w, h)
+function drawBackground(ctx, w, h)
 {
     // border
     ctx.beginPath();
@@ -151,8 +223,8 @@ function draw_background(ctx, w, h)
 
     safeArea.l = settings.lineW
     safeArea.t = Math.floor(settings.lineW / 2) + settings.headerSize
-    safeArea.r = w - 2 * settings.lineW - safeArea.l
-    safeArea.b = h - settings.footerSize - settings.headerSize - settings.lineW - safeArea.t
+    safeArea.r = w - 2 * settings.lineW
+    safeArea.b = h - settings.footerSize - settings.headerSize - settings.lineW
 
     showSafeAreaZone(ctx) // debug
 
@@ -177,21 +249,71 @@ function draw_background(ctx, w, h)
 
 }
 
-export function draw(canvas, time) {
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function drawGameOver(ctx, w, h)
+{
+    const sqrWPart = Math.floor(w / 10)
+    const sqrHPart = Math.floor(h / 10)
 
-  draw_background(ctx, canvas.width, canvas.height);
+    ctx.clearRect(sqrWPart*3, sqrHPart*3, sqrWPart*4, sqrHPart*4);
+    ctx.beginPath();
+    ctx.lineWidth = settings.lineW;
+    ctx.strokeStyle = "green"
+    ctx.strokeRect(sqrWPart*3, sqrHPart*3, sqrWPart*4, sqrHPart*3);
+    ctx.closePath();
+
+    ctx.textBaseline="top";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER", w / 2, sqrHPart*3 + settings.lineW + 80);
+
+    ctx.font = "15px Verdana";
+    ctx.fillText("tap space to replay", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
+
+
+}
+
+export function draw(canvas, time) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBackground(ctx, canvas.width, canvas.height);
     objs.aliens.forEach(a => a.draw(ctx, time));
     objs.cannon.draw(ctx);
     objs.bullets.forEach(b => b.draw(ctx));
+    if(gs.lives <= 0)
+    {
+        drawGameOver(ctx, canvas.width, canvas.height)
+    }
 }
 
 function aliensStartShoot()
 {
-    objs.aliens.forEach(a =>
+    let maxI = settings.alien.alienTypes.length;
+    let maxJ = settings.alien.inOneLine;
+    for(let j = 0; j < maxJ; j++)
     {
-        // rand a.shoot . it means generate white bullet
-        // take lows shooters. rand(0.4) to shoot.
-    });
+        for(let i = maxI - 1; i >= 0; i--)
+        {
+            if (objs.aliens[maxJ * i + j].isAlive)
+            {
+                 if(Math.random() < settings.alien.shootProbability)
+                 {
+                     setTimeout(alienMakeShoot, Math.floor(Math.random() * settings.alien.shootTime * 1000), maxJ * i + j);
+                 }
+                i = -1;
+            }
+        }
+    }
+}
+
+function alienMakeShoot(ind)
+{
+    if(objs.aliens[ind].y < objs.cannon.y)
+    {
+        const bulletX = objs.aliens[ind].x + settings.alien.size / 2;
+        const bulletY = objs.aliens[ind].y + settings.alien.size / 2;
+        const bulletVx = ((objs.cannon.x + objs.cannon._sprite.w / 2) - bulletX) / settings.alien.BulletMult
+        const bulletVy = ((objs.cannon.y + objs.cannon._sprite.h / 2) - bulletY) / settings.alien.BulletMult
+
+        objs.bullets.push(new Bullet(bulletX, bulletY, bulletVx, bulletVy, 4, 8, "white"));
+    }
 }

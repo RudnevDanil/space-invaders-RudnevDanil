@@ -10,7 +10,10 @@ export default class Bullet {
   }
 
   update(time) {
-    this.y += this.vy;
+     // this.x = Math.floor(this.x + this.vx);
+      //this.y = Math.floor(this.y + this.vy);
+      this.x += this.vx;
+      this.y += this.vy;
   }
 
   draw(ctx) {
