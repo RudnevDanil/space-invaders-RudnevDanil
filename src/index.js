@@ -14,7 +14,8 @@ let lastTick;
 let lastRender;
 let stopCycle;
 
-function run(tFrame) {
+function run(tFrame)
+{
     stopCycle = window.requestAnimationFrame(run);
 
     const nextTick = lastTick + tickLength;
@@ -27,7 +28,7 @@ function run(tFrame) {
 
     for (let i = 0; i < numTicks; i++) {
         lastTick = lastTick + tickLength;
-        update(lastTick, stopGame);
+        update(lastTick);
     }
 
     draw(canvas, tFrame);

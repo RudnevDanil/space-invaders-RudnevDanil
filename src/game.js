@@ -1,10 +1,13 @@
 import Sprite from './sprite'
 import Cannon from './cannon'
+import Bunker from './bunker'
 import Bullet from './bullet'
 import Alien from './alien'
 import InputHandler from './input-handler'
 
 import assetPath from '../assets/invaders.png'
+
+let canvasForReplay;
 
 let gs = { // game state. Dont change! It isn't a settings!
     seconds:{
@@ -26,11 +29,22 @@ let settings = {
         size: 33, // px // size of one alien
         shootProbability: 0.1, // probability of alien shooting
         BulletMult: 300, // amount steps like a speed
+        injDist: 33, // distance from center of alien ot point C on line in detecting injuring
+        killDist: 15, // distance from center of alien ot point C on line in detecting killing. < injDist
+        collisionMaxStepPx: 1, // step on line while detecting collision. <= killDist. This parameter should be == 1 if bunkers intersect by masks
+        aliveAfterKilling: 1500, // ms alive time when killing
+        shootInterval: 200, // ms between few shootings
     },
     cannon: {
         step: 4, // px // each tep of <- or -> move cannon on step px
         baseBulletSpeed: 8,
         bulletSpeedProbabilityRange: 0.2,
+        killDist: 11, // distance from center of alien to point C on line in detecting killing. < injDist
+        collisionMaxStepPx: 1, // step on line while detecting collision. <= killDist. This parameter should be == 1 if bunkers intersect by masks
+    },
+    bunker:{
+        amount: 4,
+        distanceFromCannon: 50,
     }
 }
 
@@ -50,9 +64,10 @@ const sprites = {
 };
 
 const objs = {
-  bullets: [],
-  aliens: [],
-  cannon: null,
+    bullets: [],
+    aliens: [],
+    bunkers: [],
+    cannon: null,
 };
 const inputHandler = new InputHandler();
 
@@ -75,6 +90,8 @@ export function preload(onPreloadComplete)
 
 export function init(canvas)
 {
+
+    canvasForReplay = canvas
 	for (let i = 0, len = settings.alien.alienTypes.length; i < len; i++)
 	{
         const alienType = settings.alien.alienTypes[i];
@@ -83,12 +100,17 @@ export function init(canvas)
             let alienX = settings.alien.size * (j + 1);
             let alienY = settings.alien.size * (i + 1) + settings.headerSize;
 
-            // need to change array to [][]
-            objs.aliens.push(new Alien(alienX, alienY, sprites.aliens[alienType]));
+            objs.aliens.push(new Alien(alienX, alienY, sprites.aliens[alienType], alienType));
         }
 	}
 
     objs.cannon = new Cannon(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
+
+	for(let i = 0; i < settings.bunker.amount; i++)
+    {
+        objs.bunkers.push(new Bunker(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker))
+    }
+
 
     gs.timer = setTimeout(timer_tictoc, 1000);
 }
@@ -104,37 +126,52 @@ function timer_tictoc()
     gs.timer = setTimeout(timer_tictoc, 1000);
 }
 
-export function update(time, stopGame)
+export function update(time)
 {
-    // Left
-    let potentialX = objs.cannon.x - settings.cannon.step
-	if (inputHandler.isDown(37) &&
-        potentialX >= safeArea.l)
-	{
-        objs.cannon.x = potentialX;
-	}
-
-    // Right
-    potentialX = objs.cannon.x + settings.cannon.step
-	if (inputHandler.isDown(39) &&
-        potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l)
+    if(gs.lives > 0)
     {
-        objs.cannon.x = potentialX;
-	}
+        // Left
+        let potentialX = objs.cannon.x - settings.cannon.step
+        if (inputHandler.isDown(37) &&
+            potentialX >= safeArea.l)
+        {
+            objs.cannon.x = potentialX;
+        }
 
-    // Space
-    if (inputHandler.isPressed(32))
-    {
-        const bulletX = objs.cannon.x +  Math.floor(objs.cannon._sprite.h / 2);
-        const bulletY = objs.cannon.y;
-        const bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2)
-        objs.bullets.push(new Bullet(bulletX, bulletY,0,  bulletVy, 4, 8, "green"));
+        // Right
+        potentialX = objs.cannon.x + settings.cannon.step
+        if (inputHandler.isDown(39) &&
+            potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l)
+        {
+            objs.cannon.x = potentialX;
+        }
+
+        // Space
+        if (inputHandler.isPressed(32))
+        {
+            const bulletX = objs.cannon.x + Math.floor(objs.cannon._sprite.h / 2);
+            const bulletY = objs.cannon.y;
+            const bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2)
+            objs.bullets.push(new Bullet(bulletX, bulletY, 0, bulletVy, 4, 8, "green"));
+        }
+
+        objs.bullets.forEach(b => b.update(time));
+        checkBulletIntersection()
+        checkAreBulletsInSafeArea()
     }
+    else if (inputHandler.isPressed(32))
+    {
+        // replay
+        objs.cannon = null
+        objs.bullets = []
+        objs.aliens = []
+        gs.lives = 3
+        gs.score = 0
+        gs.level = 1
+        gs.seconds.aShoot = 0
 
-    objs.bullets.forEach(b => b.update(time));
-
-    checkBulletIntersection()
-    checkAreBulletsInSafeArea()
+        init(canvasForReplay)
+    }
 }
 
 function checkAreBulletsInSafeArea()
@@ -146,7 +183,6 @@ function checkAreBulletsInSafeArea()
             objs.bullets[i].y < safeArea.t ||
             objs.bullets[i].y > safeArea.b + safeArea.t)
         {
-            //delete objs.bullets[i];
             objs.bullets.splice(i,1);
         }
     }
@@ -158,30 +194,200 @@ function checkBulletIntersection()
     {
         if (objs.bullets[i].color == "white")
         {
-            checkCannonOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy)
+            checkCannonOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy, i)
         }
         else if(objs.bullets[i].color == "green")
         {
-            checkAlienOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy)
+            checkAlienOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy, i)
         }
     }
 }
 
-function checkAlienOnLine(ax, ay, bx ,by)
+function checkAlienOnLine(ax, ay, bx ,by,indBullet)
 {
-    
-}
+    const vxFull = ax - bx
+    const vyFull = ay - by
+    const steps = Math.floor(Math.max(Math.abs(vxFull), Math.abs(vyFull)) / settings.alien.collisionMaxStepPx)
 
-function checkCannonOnLine(ax, ay, bx ,by)
-{
-    // if cannon on line player shouted
-    if(gs.lives <= 0)
+    // check for boxes between a and b
+    let xStep = 0
+    let yStep = 0
+    let stepCounter = 1 // not 0 because we don't need to check point b
+    let killed = false
+    let toPointA = false
+    let c = {
+        x: bx,
+        y: by,
+    }
+
+    if (steps !== 0)
     {
-        stopGame()
+        xStep = vxFull / steps
+        yStep = vyFull / steps
+        c.x += xStep
+        c.y += yStep
     }
     else
     {
-        gs.lives -= 1
+        stepCounter = steps + 1
+        toPointA = true
+        c.x = ax
+        c.y = ay
+    }
+
+    while ((stepCounter <= steps  || toPointA) && !killed)
+    {
+        for(let i = 0; i < objs.aliens.length; i++)
+        {
+            if(objs.aliens[i].isAlive)
+            {
+                let xDist = Math.abs(c.x - (objs.aliens[i].x + settings.alien.size / 2))
+                if(xDist <= settings.alien.injDist / 2)
+                {
+                    let yDist = Math.abs((c.y - (objs.aliens[i].y + settings.alien.size / 2)))
+                    if(yDist <= settings.alien.injDist / 2)
+                    {
+                        injureAlien(i)
+                        if(xDist <= settings.alien.killDist / 2 && yDist <= settings.alien.killDist / 2)
+                        {
+                            killAlien(i)
+                            killed = true
+                            // destroyBullet
+                            objs.bullets.splice(indBullet,1)
+                        }
+                    }
+                }
+            }
+        }
+
+        // check is here bunker
+        for(let i = 0; i < objs.bunkers.length && !killed; i++)
+        {
+            if(objs.bunkers[i].hasPoint(c.x, c.y))
+            {
+                objs.bullets.splice(indBullet,1)
+                killed = true
+            }
+        }
+
+        if(toPointA)
+        {
+            toPointA = false
+        }
+        else if (steps !== 0)
+        {
+            c.x += xStep
+            c.y += yStep
+            stepCounter += 1
+
+            if (stepCounter > steps)
+            {
+                toPointA = true
+                c.x = ax
+                c.y = ay
+            }
+        }
+    }
+}
+
+function injureAlien(index)
+{
+    if(!objs.aliens[index].isInjured)
+    {
+        objs.aliens[index].blinkTime = 350
+        objs.aliens[index].isInjured = true
+    }
+}
+
+function killAlien(index)
+{
+    if(objs.aliens[index].blinkTime !== 100)
+    {
+        gs.score += 1
+        objs.aliens[index].blinkTime = 100
+        setTimeout(makeAlienIsNotAlive, settings.alien.aliveAfterKilling, index)
+    }
+}
+
+function makeAlienIsNotAlive(index)
+{
+    objs.aliens[index].isAlive = false
+}
+
+function checkCannonOnLine(ax, ay, bx ,by, indBullet)
+{
+    const vxFull = ax - bx
+    const vyFull = ay - by
+    const steps = Math.floor(Math.max(Math.abs(vxFull), Math.abs(vyFull)) / settings.cannon.collisionMaxStepPx)
+
+    // check for boxes between a and b
+    let xStep = 0
+    let yStep = 0
+    let stepCounter = 1 // not 0 because we don't need to check point b
+    let killed = false
+    let toPointA = false
+    let c = {
+        x: bx,
+        y: by,
+    }
+
+    if (steps !== 0)
+    {
+        xStep = vxFull / steps
+        yStep = vyFull / steps
+        c.x += xStep
+        c.y += yStep
+    }
+    else
+    {
+        stepCounter = steps + 1
+        toPointA = true
+        c.x = ax
+        c.y = ay
+    }
+
+    while ((stepCounter <= steps  || toPointA) && !killed)
+    {
+        let yDist = Math.abs((c.y - (objs.cannon.y + objs.cannon._sprite.h / 2)))
+
+        if(yDist <= settings.cannon.killDist / 2)
+        {
+            let xDist = Math.abs(c.x - (objs.cannon.x + objs.cannon._sprite.w / 2))
+            if(xDist <= settings.cannon.killDist / 2)
+            {
+                killCannon()
+                killed = true
+                // destroyBullet
+                objs.bullets.splice(indBullet,1);
+            }
+        }
+
+        if(toPointA)
+        {
+            toPointA = false
+        }
+        else if (steps !== 0)
+        {
+            c.x += xStep
+            c.y += yStep
+            stepCounter += 1
+
+            if (stepCounter > steps)
+            {
+                toPointA = true
+                c.x = ax
+                c.y = ay
+            }
+        }
+    }
+}
+
+function killCannon()
+{
+    gs.lives -= 1
+    if(gs.lives <= 0)
+    {
+        stopGame()
     }
 }
 
@@ -226,6 +432,12 @@ function drawBackground(ctx, w, h)
     safeArea.r = w - 2 * settings.lineW
     safeArea.b = h - settings.footerSize - settings.headerSize - settings.lineW
 
+    // locate bunkers
+    for(let i = 1; i <= objs.bunkers.length; i++)
+    {
+        objs.bunkers[i - 1].x = i * Math.floor(safeArea.r / (settings.bunker.amount + 1))
+    }
+
     showSafeAreaZone(ctx) // debug
 
     // text settings
@@ -267,8 +479,6 @@ function drawGameOver(ctx, w, h)
 
     ctx.font = "15px Verdana";
     ctx.fillText("tap space to replay", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
-
-
 }
 
 export function draw(canvas, time) {
@@ -279,6 +489,7 @@ export function draw(canvas, time) {
     objs.aliens.forEach(a => a.draw(ctx, time));
     objs.cannon.draw(ctx);
     objs.bullets.forEach(b => b.draw(ctx));
+    objs.bunkers.forEach(b => b.draw(ctx));
     if(gs.lives <= 0)
     {
         drawGameOver(ctx, canvas.width, canvas.height)
@@ -293,11 +504,16 @@ function aliensStartShoot()
     {
         for(let i = maxI - 1; i >= 0; i--)
         {
-            if (objs.aliens[maxJ * i + j].isAlive)
+            if (objs.aliens[maxJ * i + j].isAlive && !objs.aliens[maxJ * i + j].isInjured)
             {
                  if(Math.random() < settings.alien.shootProbability)
                  {
-                     setTimeout(alienMakeShoot, Math.floor(Math.random() * settings.alien.shootTime * 1000), maxJ * i + j);
+                     let timeout = Math.floor(Math.random() * settings.alien.shootTime * 1000)
+                     setTimeout(alienMakeShoot, timeout, maxJ * i + j);
+                     for (let k = 1; k <= objs.aliens[maxJ * i + j].alienType; k++)
+                     {
+                         setTimeout(alienMakeShoot, timeout + k * settings.alien.shootInterval, maxJ * i + j);
+                     }
                  }
                 i = -1;
             }
