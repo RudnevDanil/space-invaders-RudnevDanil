@@ -213,6 +213,8 @@ var Bunker = /*#__PURE__*/function () {
     value: function draw(ctx, time) {
       ctx.drawImage(this._sprite.img, this._sprite.x, this._sprite.y, this._sprite.w, this._sprite.h, this.x, this.y, this._sprite.w, this._sprite.h);
       var imgSize = this.w * this.h;
+      var indF = 0;
+      var indS = 0;
 
       if (!this.init) {
         var _myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
@@ -234,8 +236,6 @@ var Bunker = /*#__PURE__*/function () {
       }
 
       var myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
-      var indF = 0;
-      var indS = 0;
 
       for (var _i = 0; _i < imgSize; _i++) {
         indF = Math.floor(_i / this.w);
@@ -513,7 +513,7 @@ var gs = {
   },
   level: 1,
   score: 0,
-  lives: 3333,
+  lives: 3,
   goToNextLevel: false
 };
 var settings = {
@@ -556,7 +556,9 @@ var settings = {
     // moving step in x axis
     blockMovingVy: 1,
     // moving step in y axis
-    blockMovingTime: 100 // ms between moving
+    blockMovingTime: 100,
+    // ms between moving
+    blockMovChangeDirProbability: 0.05 // sometimes it's change direction
 
   },
   cannon: {
@@ -698,7 +700,7 @@ function isAnyAliveAliens() {
 function moveAliens() {
   if (gs.lives > 0 && gs.goToNextLevel == false) {
     // Y axis
-    settings.alien.blockMovingVy *= Math.random() < 0.1 ? -1 : 1;
+    settings.alien.blockMovingVy *= Math.random() < settings.alien.blockMovChangeDirProbability ? -1 : 1;
 
     if (settings.alien.blockMovingVy > 0) {
       // check if bottom of block will not touch top of bunkers
@@ -749,7 +751,8 @@ function moveAliens() {
     objs.aliens.forEach(function (a) {
       return a.y += settings.alien.blockMovingVy;
     }); // X axis
-    //settings.alien.blockMovingVx *= (Math.random() < 0.05)? -1: 1
+
+    settings.alien.blockMovingVx *= Math.random() < settings.alien.blockMovChangeDirProbability ? -1 : 1;
 
     if (settings.alien.blockMovingVx > 0) {
       // check if bottom of block will not touch top of bunkers
@@ -771,7 +774,7 @@ function moveAliens() {
         return;
       }
 
-      _touch2 = right + settings.alien.blockMovingVx + 5 >= safeArea.r;
+      _touch2 = right + settings.alien.blockMovingVx + 0.5 >= safeArea.r;
       settings.alien.blockMovingVx = _touch2 ? -1 * Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx;
     } else {
       // check if top of block will not touch top of safe area
@@ -793,7 +796,7 @@ function moveAliens() {
         return;
       }
 
-      _touch3 = left + settings.alien.blockMovingVx - 5 < safeArea.l;
+      _touch3 = left + settings.alien.blockMovingVx - 0.5 < safeArea.l;
       settings.alien.blockMovingVx = _touch3 ? Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx;
     }
 

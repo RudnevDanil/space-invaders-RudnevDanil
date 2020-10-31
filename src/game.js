@@ -15,7 +15,7 @@ let gs = { // game state. Dont change! It isn't a settings!
     },
     level: 1,
     score: 0,
-    lives: 3333,
+    lives: 3,
     goToNextLevel: false,
 }
 
@@ -42,6 +42,7 @@ let settings = {
         blockMovingVx: 1, // moving step in x axis
         blockMovingVy: 1, // moving step in y axis
         blockMovingTime: 100, // ms between moving
+        blockMovChangeDirProbability: 0.05, // sometimes it's change direction
     },
     cannon: {
         step: 4, // px // each tep of <- or -> move cannon on step px
@@ -203,7 +204,7 @@ function moveAliens()
     if(gs.lives > 0 && gs.goToNextLevel == false)
     {
         // Y axis
-        settings.alien.blockMovingVy *= (Math.random() < 0.1) ? -1 : 1
+        settings.alien.blockMovingVy *= (Math.random() < settings.alien.blockMovChangeDirProbability) ? -1 : 1
 
         if (settings.alien.blockMovingVy > 0) {
             // check if bottom of block will not touch top of bunkers
@@ -247,7 +248,7 @@ function moveAliens()
         objs.aliens.forEach(a => a.y += settings.alien.blockMovingVy);
 
         // X axis
-        //settings.alien.blockMovingVx *= (Math.random() < 0.05)? -1: 1
+        settings.alien.blockMovingVx *= (Math.random() < settings.alien.blockMovChangeDirProbability)? -1: 1
 
         if (settings.alien.blockMovingVx > 0) {
             // check if bottom of block will not touch top of bunkers
@@ -266,7 +267,7 @@ function moveAliens()
             if (!founded) {
                 return
             }
-            touch = right + settings.alien.blockMovingVx + 5 >= safeArea.r
+            touch = right + settings.alien.blockMovingVx + 0.5 >= safeArea.r
             settings.alien.blockMovingVx = touch ? -1 * Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx
         } else {
             // check if top of block will not touch top of safe area
@@ -285,7 +286,7 @@ function moveAliens()
             if (!founded) {
                 return
             }
-            touch = left + settings.alien.blockMovingVx - 5 < safeArea.l
+            touch = left + settings.alien.blockMovingVx - 0.5 < safeArea.l
             settings.alien.blockMovingVx = touch ? Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx
         }
         objs.aliens.forEach(a => a.x += settings.alien.blockMovingVx);

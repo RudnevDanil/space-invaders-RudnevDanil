@@ -25,6 +25,8 @@ export default class Bunker {
         );
 
         const imgSize = this.w * this.h
+        let indF = 0
+        let indS = 0
         if(!this.init)
         {
             let myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
@@ -47,8 +49,7 @@ export default class Bunker {
         }
 
         let myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
-        let indF = 0
-        let indS = 0
+
 
         for (let i = 0; i < imgSize; i++)
         {
