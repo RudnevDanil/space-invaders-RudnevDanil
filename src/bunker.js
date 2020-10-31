@@ -14,6 +14,7 @@ export default class Bunker {
                 this.mask[i][j] = true;
             }
         }
+        this.init = false
     }
 
     draw(ctx, time) {
@@ -22,36 +23,78 @@ export default class Bunker {
             this._sprite.x, this._sprite.y, this._sprite.w, this._sprite.h,
             this.x, this.y, this._sprite.w, this._sprite.h
         );
-        //console.log(this.x, this.y, this.w, this.h)
-        let myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
+
         const imgSize = this.w * this.h
+        if(!this.init)
+        {
+            let myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
+            for (let i = 0; i < imgSize; i++)
+            {
+                myImage.data[i * 4 + 0] = 0
+                indF = Math.floor(i / this.w)
+                indS = i - this.w * indF
+                if(myImage.data[i * 4 + 1] === 250)
+                {
+                    this.mask[indF][indS] = true
+                }
+                else
+                {
+                    this.mask[indF][indS] = false
+                }
+            }
+            this.init = true
+            ctx.putImageData(myImage, this.x, this.y)
+        }
+
+        let myImage = ctx.getImageData(this.x, this.y, this.w, this.h);
+        let indF = 0
+        let indS = 0
+
         for (let i = 0; i < imgSize; i++)
         {
-            myImage.data[i * 4 + 3] = this.mask[Math.floor(i / this.w)][i - this.w * Math.floor(i / this.w)] ? 255 : 0
+            indF = Math.floor(i / this.w)
+            indS = i - this.w * indF
+            myImage.data[i * 4 + 3] = this.mask[indF][indS] ? 255 : 0
         }
         ctx.putImageData(myImage, this.x, this.y)
-
-
     }
 
     hasPoint(x, y)
     {
-        console.log("work point")
         if (x >= this.x && x < this.x + this.w &&
-            y >= this.y && y < this.y + this.h)
+            y >= this.y && y < this.y + this.h &&
+            this.mask[y - this.y][x - this.x])
         {
-            if(this.mask[x - this.x][y - this.y])
-            {
-                this.destroyPoint(x, y)
-                return true
-            }
+            this.destroyPoint(x, y)
+            return true
         }
         return false
     }
 
     destroyPoint(x, y)
     {
-        console.log("DDD")
-        this.mask[x - this.x][y - this.y] = false
+        let firtsCoord = y - this.y
+        let secondCoord = x - this.x
+        this.mask[firtsCoord][secondCoord] = false
+
+        const isTop = firtsCoord > 0
+        const isBot = firtsCoord < this.h - 1
+        const isLeft = secondCoord > 0
+        const isRight = secondCoord < this.w - 1
+
+        if (isRight) {this.mask[firtsCoord][secondCoord + 1] = false}
+        if (isLeft)  {this.mask[firtsCoord][secondCoord - 1] = false}
+        if (isTop)
+        {
+            {this.mask[firtsCoord - 1][secondCoord + 1] = false}
+            {this.mask[firtsCoord - 1][secondCoord    ] = false}
+            {this.mask[firtsCoord - 1][secondCoord - 1] = false}
+        }
+        if (isBot)
+        {
+            {this.mask[firtsCoord + 1][secondCoord + 1] = false}
+            {this.mask[firtsCoord + 1][secondCoord    ] = false}
+            {this.mask[firtsCoord + 1][secondCoord - 1] = false}
+        }
     }
 }

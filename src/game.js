@@ -23,7 +23,7 @@ let settings = {
     headerSize: 50, // top offset in background
     footerSize: 50, // bottom offset in background
     alien: {
-        alienTypes: [1, 0, 1, 2, 0, 2], // types numbers in each line
+        alienTypes: [2, 1, 0, 2, 1, 0], // types numbers in each line
         inOneLine: 11, // pcs // amount of alien in one line. It means amount rows
         shootTime: 1, // sec // each shootTime lower of aliens are shoot
         size: 33, // px // size of one alien
@@ -34,6 +34,7 @@ let settings = {
         collisionMaxStepPx: 1, // step on line while detecting collision. <= killDist. This parameter should be == 1 if bunkers intersect by masks
         aliveAfterKilling: 1500, // ms alive time when killing
         shootInterval: 200, // ms between few shootings
+        makeNotInjuredTime: 2000, // ms how much time alien will be injured. Injured could shoot only one bullet per time
     },
     cannon: {
         step: 4, // px // each tep of <- or -> move cannon on step px
@@ -165,6 +166,7 @@ export function update(time)
         objs.cannon = null
         objs.bullets = []
         objs.aliens = []
+        objs.bunkers = []
         gs.lives = 3
         gs.score = 0
         gs.level = 1
@@ -192,11 +194,11 @@ function checkBulletIntersection()
 {
     for(let i = 0; i < objs.bullets.length; i++)
     {
-        if (objs.bullets[i].color == "white")
+        if (objs.bullets[i].color === "white")
         {
             checkCannonOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy, i)
         }
-        else if(objs.bullets[i].color == "green")
+        else if(objs.bullets[i].color === "green")
         {
             checkAlienOnLine(objs.bullets[i].x, objs.bullets[i].y,objs.bullets[i].x-objs.bullets[i].vx, objs.bullets[i].y - objs.bullets[i].vy, i)
         }
@@ -263,7 +265,7 @@ function checkAlienOnLine(ax, ay, bx ,by,indBullet)
         // check is here bunker
         for(let i = 0; i < objs.bunkers.length && !killed; i++)
         {
-            if(objs.bunkers[i].hasPoint(c.x, c.y))
+            if(objs.bunkers[i].hasPoint(Math.floor(c.x), Math.floor(c.y)))
             {
                 objs.bullets.splice(indBullet,1)
                 killed = true
@@ -297,6 +299,13 @@ function injureAlien(index)
         objs.aliens[index].blinkTime = 350
         objs.aliens[index].isInjured = true
     }
+    setTimeout(makeNotInjured, settings.alien.makeNotInjuredTime, index)
+}
+
+function makeNotInjured(index)
+{
+    objs.aliens[index].blinkTime = 1000
+    objs.aliens[index].isInjured = false
 }
 
 function killAlien(index)
@@ -359,6 +368,16 @@ function checkCannonOnLine(ax, ay, bx ,by, indBullet)
                 killed = true
                 // destroyBullet
                 objs.bullets.splice(indBullet,1);
+            }
+        }
+
+        // check is here bunker
+        for(let i = 0; i < objs.bunkers.length && !killed; i++)
+        {
+            if(objs.bunkers[i].hasPoint(Math.floor(c.x), Math.floor(c.y)))
+            {
+                objs.bullets.splice(indBullet,1)
+                killed = true
             }
         }
 
@@ -504,15 +523,18 @@ function aliensStartShoot()
     {
         for(let i = maxI - 1; i >= 0; i--)
         {
-            if (objs.aliens[maxJ * i + j].isAlive && !objs.aliens[maxJ * i + j].isInjured)
+            if (objs.aliens[maxJ * i + j].isAlive)
             {
                  if(Math.random() < settings.alien.shootProbability)
                  {
                      let timeout = Math.floor(Math.random() * settings.alien.shootTime * 1000)
                      setTimeout(alienMakeShoot, timeout, maxJ * i + j);
-                     for (let k = 1; k <= objs.aliens[maxJ * i + j].alienType; k++)
+                     if(!objs.aliens[maxJ * i + j].isInjured)
                      {
-                         setTimeout(alienMakeShoot, timeout + k * settings.alien.shootInterval, maxJ * i + j);
+                         for (let k = 1; k <= objs.aliens[maxJ * i + j].alienType; k++)
+                         {
+                             setTimeout(alienMakeShoot, timeout + k * settings.alien.shootInterval, maxJ * i + j);
+                         }
                      }
                  }
                 i = -1;
