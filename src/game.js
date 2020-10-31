@@ -15,13 +15,17 @@ let gs = { // game state. Dont change! It isn't a settings!
     },
     level: 1,
     score: 0,
-    lives: 3,
+    lives: 3333,
+    goToNextLevel: false,
 }
 
 let settings = {
     lineW: 6, // width of background line
     headerSize: 50, // top offset in background
     footerSize: 50, // bottom offset in background
+    game:{
+        nextLevelWait: 2000, // ms waiting time between levels
+    },
     alien: {
         alienTypes: [2, 1, 0, 2, 1, 0], // types numbers in each line
         inOneLine: 11, // pcs // amount of alien in one line. It means amount rows
@@ -35,6 +39,9 @@ let settings = {
         aliveAfterKilling: 1500, // ms alive time when killing
         shootInterval: 200, // ms between few shootings
         makeNotInjuredTime: 2000, // ms how much time alien will be injured. Injured could shoot only one bullet per time
+        blockMovingVx: 1, // moving step in x axis
+        blockMovingVy: 1, // moving step in y axis
+        blockMovingTime: 100, // ms between moving
     },
     cannon: {
         step: 4, // px // each tep of <- or -> move cannon on step px
@@ -93,17 +100,7 @@ export function init(canvas)
 {
 
     canvasForReplay = canvas
-	for (let i = 0, len = settings.alien.alienTypes.length; i < len; i++)
-	{
-        const alienType = settings.alien.alienTypes[i];
-		for (let j = 0; j < settings.alien.inOneLine; j++)
-        {
-            let alienX = settings.alien.size * (j + 1);
-            let alienY = settings.alien.size * (i + 1) + settings.headerSize;
-
-            objs.aliens.push(new Alien(alienX, alienY, sprites.aliens[alienType], alienType));
-        }
-	}
+    setAliens(gs.level)
 
     objs.cannon = new Cannon(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
 
@@ -112,8 +109,17 @@ export function init(canvas)
         objs.bunkers.push(new Bunker(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker))
     }
 
-
     gs.timer = setTimeout(timer_tictoc, 1000);
+    setTimerMoving();
+}
+
+function setTimerMoving()
+{
+    if(isAnyAliveAliens())
+    {
+        moveAliens()
+    }
+    setTimeout(setTimerMoving, settings.alien.blockMovingTime)
 }
 
 function timer_tictoc()
@@ -159,6 +165,10 @@ export function update(time)
         objs.bullets.forEach(b => b.update(time));
         checkBulletIntersection()
         checkAreBulletsInSafeArea()
+        if(!isAnyAliveAliens())
+        {
+            goToNextLevel()
+        }
     }
     else if (inputHandler.isPressed(32))
     {
@@ -174,6 +184,169 @@ export function update(time)
 
         init(canvasForReplay)
     }
+}
+
+function isAnyAliveAliens()
+{
+    for(let i = 0; i < objs.aliens.length; i++)
+    {
+        if(objs.aliens[i].isAlive)
+        {
+            return true
+        }
+    }
+    return false
+}
+
+function moveAliens()
+{
+    if(gs.lives > 0 && gs.goToNextLevel == false)
+    {
+        // Y axis
+        settings.alien.blockMovingVy *= (Math.random() < 0.1) ? -1 : 1
+
+        if (settings.alien.blockMovingVy > 0) {
+            // check if bottom of block will not touch top of bunkers
+            let touch = false
+            // first let's find bottom alive alien
+            let founded = false
+            let bottom = -1
+            for (let i = settings.alien.alienTypes.length - 1; i >= 0 && !founded; i--) {
+                for (let j = 0; j < settings.alien.inOneLine; j++) {
+                    if (objs.aliens[i * settings.alien.inOneLine + j].isAlive) {
+                        founded = true
+                        bottom = objs.aliens[i * settings.alien.inOneLine + j].y + settings.alien.size;
+                    }
+                }
+            }
+            if (!founded) {
+                return
+            }
+            touch = bottom + settings.alien.blockMovingVy + 0.5 >= objs.bunkers[0].y
+            settings.alien.blockMovingVy = (touch ? -1 : 1) * Math.abs(settings.alien.blockMovingVy)
+        } else {
+            // check if top of block will not touch top of safe area
+            let touch = false
+            // first let's find top alive alien
+            let founded = false
+            let top = -1
+            for (let i = 0; i < settings.alien.alienTypes.length && !founded; i++) {
+                for (let j = 0; j < settings.alien.inOneLine; j++) {
+                    if (objs.aliens[i * settings.alien.inOneLine + j].isAlive) {
+                        founded = true
+                        top = objs.aliens[i * settings.alien.inOneLine + j].y;
+                    }
+                }
+            }
+            if (!founded) {
+                return
+            }
+            touch = top + settings.alien.blockMovingVy - 0.5 < safeArea.t
+            settings.alien.blockMovingVy = touch ? Math.abs(settings.alien.blockMovingVy) : settings.alien.blockMovingVy
+        }
+        objs.aliens.forEach(a => a.y += settings.alien.blockMovingVy);
+
+        // X axis
+        //settings.alien.blockMovingVx *= (Math.random() < 0.05)? -1: 1
+
+        if (settings.alien.blockMovingVx > 0) {
+            // check if bottom of block will not touch top of bunkers
+            let touch = false
+            // first let's find right alive alien
+            let founded = false
+            let right = -1
+            for (let j = settings.alien.inOneLine - 1; j >= 0; j--) {
+                for (let i = 0; i < settings.alien.alienTypes.length && !founded; i++) {
+                    if (objs.aliens[i * settings.alien.inOneLine + j].isAlive) {
+                        founded = true
+                        right = objs.aliens[i * settings.alien.inOneLine + j].x + settings.alien.size;
+                    }
+                }
+            }
+            if (!founded) {
+                return
+            }
+            touch = right + settings.alien.blockMovingVx + 5 >= safeArea.r
+            settings.alien.blockMovingVx = touch ? -1 * Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx
+        } else {
+            // check if top of block will not touch top of safe area
+            let touch = false
+            // first let's find left alive alien
+            let founded = false
+            let left = -1
+            for (let j = 0; j <= settings.alien.inOneLine; j++) {
+                for (let i = 0; i < settings.alien.alienTypes.length && !founded; i++) {
+                    if (objs.aliens[i * settings.alien.inOneLine + j].isAlive) {
+                        founded = true
+                        left = objs.aliens[i * settings.alien.inOneLine + j].x;
+                    }
+                }
+            }
+            if (!founded) {
+                return
+            }
+            touch = left + settings.alien.blockMovingVx - 5 < safeArea.l
+            settings.alien.blockMovingVx = touch ? Math.abs(settings.alien.blockMovingVx) : settings.alien.blockMovingVx
+        }
+        objs.aliens.forEach(a => a.x += settings.alien.blockMovingVx);
+    }
+}
+
+function setAliens(lvl)
+{
+    if(lvl === 1)
+    {
+        settings.alien.alienTypes = [2, 1, 0, 2, 1, 0] // types numbers in each line
+        settings.alien.inOneLine = 11 // pcs // amount of alien in one line. It means amount rows
+        settings.alien.shootProbability = 0.1
+        settings.alien.blockMovingTime = 100
+    }
+    else if(lvl === 2)
+    {
+        settings.alien.alienTypes = [2, 1, 2, 1] // types numbers in each line
+        settings.alien.inOneLine = 5 // pcs // amount of alien in one line. It means amount rows
+        settings.alien.shootProbability = 0.5
+        settings.alien.blockMovingTime = 70
+    }
+    else
+    {
+        settings.alien.alienTypes = [2, 1, 0] // types numbers in each line
+        settings.alien.inOneLine = 5 // pcs // amount of alien in one line. It means amount rows
+        settings.alien.shootProbability = 0.75
+        settings.alien.blockMovingTime = 50
+    }
+
+    objs.aliens = []
+    for (let i = 0, len = settings.alien.alienTypes.length; i < len; i++)
+    {
+        const alienType = settings.alien.alienTypes[i];
+        for (let j = 0; j < settings.alien.inOneLine; j++)
+        {
+            let alienX = settings.alien.size * (j + 1);
+            let alienY = settings.alien.size * (i + 1) + settings.headerSize;
+
+            objs.aliens.push(new Alien(alienX, alienY, sprites.aliens[alienType], alienType));
+        }
+    }
+}
+
+function goToNextLevel()
+{
+    if(gs.goToNextLevel === false)
+    {
+        stopGame()
+        gs.goToNextLevel = true
+        setTimeout(startNextLevel, settings.game.nextLevelWait)
+    }
+}
+
+function startNextLevel()
+{
+    gs.goToNextLevel = false
+    objs.aliens = []
+    objs.bullets = []
+    gs.level += 1
+    setAliens(gs.level)
 }
 
 function checkAreBulletsInSafeArea()
@@ -312,7 +485,7 @@ function killAlien(index)
 {
     if(objs.aliens[index].blinkTime !== 100)
     {
-        gs.score += 1
+        gs.score += gs.level
         objs.aliens[index].blinkTime = 100
         setTimeout(makeAlienIsNotAlive, settings.alien.aliveAfterKilling, index)
     }
@@ -500,6 +673,28 @@ function drawGameOver(ctx, w, h)
     ctx.fillText("tap space to replay", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
 }
 
+function drawNextLevel(ctx, w, h)
+{
+    const sqrWPart = Math.floor(w / 10)
+    const sqrHPart = Math.floor(h / 10)
+
+    ctx.clearRect(sqrWPart*3, sqrHPart*3, sqrWPart*4, sqrHPart*4);
+    ctx.beginPath();
+    ctx.lineWidth = settings.lineW;
+    ctx.strokeStyle = "green"
+    ctx.strokeRect(sqrWPart*3, sqrHPart*3, sqrWPart*4, sqrHPart*3);
+    ctx.closePath();
+
+    ctx.font = "30px Verdana";
+    ctx.textBaseline="top";
+    ctx.textAlign = "center";
+    ctx.strokeStyle = "white"
+    ctx.fillText("NEXT LEVEL", w / 2, sqrHPart*3 + settings.lineW + 80);
+
+    ctx.font = "15px Verdana";
+    ctx.fillText("you are not bad", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
+}
+
 export function draw(canvas, time) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -512,6 +707,10 @@ export function draw(canvas, time) {
     if(gs.lives <= 0)
     {
         drawGameOver(ctx, canvas.width, canvas.height)
+    }
+    if(gs.goToNextLevel)
+    {
+        drawNextLevel(ctx, canvas.width, canvas.height)
     }
 }
 
