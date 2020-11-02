@@ -478,6 +478,79 @@ var InputHandler = /*#__PURE__*/function () {
 exports.default = InputHandler;
 },{}],"assets/invaders.png":[function(require,module,exports) {
 module.exports = "/invaders.c61678f5.png";
+},{}],"src/sounds.js":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+var Sounds = /*#__PURE__*/function () {
+  function Sounds() {
+    _classCallCheck(this, Sounds);
+
+    this.cannonShoot = document.getElementById("cannonShoot");
+    this.background = document.getElementById("background");
+    this.alienDead = document.getElementById("alienDead");
+    this.cannonDead = document.getElementById("cannonDead");
+    this.gameOver = document.getElementById("gameOver");
+  }
+
+  _createClass(Sounds, [{
+    key: "playBackground",
+    value: function playBackground() {
+      this.background.play();
+      this.background.loop = true;
+    }
+  }, {
+    key: "playCannonShoot",
+    value: function playCannonShoot() {
+      this.cannonShoot.pause();
+      this.cannonShoot.currentTime = 0;
+      this.cannonShoot.play();
+    }
+  }, {
+    key: "playAlienDead",
+    value: function playAlienDead() {
+      this.alienDead.pause();
+      this.alienDead.currentTime = 0;
+      this.alienDead.play();
+    }
+  }, {
+    key: "playCannonDead",
+    value: function playCannonDead() {
+      this.cannonDead.pause();
+      this.cannonDead.currentTime = 0;
+      this.cannonDead.play();
+    }
+  }, {
+    key: "playGameOver",
+    value: function playGameOver() {
+      this.background.pause();
+      this.background.currentTime = 0;
+      this.gameOver.currentTime = 0;
+      this.gameOver.play();
+      this.gameOver.addEventListener("ended", this.replayBackground.bind(null, this));
+    }
+  }, {
+    key: "replayBackground",
+    value: function replayBackground(player) {
+      player.background.play();
+      player.background.loop = true;
+    }
+  }]);
+
+  return Sounds;
+}();
+
+exports.default = Sounds;
 },{}],"src/game.js":[function(require,module,exports) {
 "use strict";
 
@@ -503,6 +576,8 @@ var _inputHandler = _interopRequireDefault(require("./input-handler"));
 
 var _invaders = _interopRequireDefault(require("../assets/invaders.png"));
 
+var _sounds = _interopRequireDefault(require("./sounds"));
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 var canvasForReplay;
@@ -511,6 +586,7 @@ var gs = {
   seconds: {
     aShoot: 0
   },
+  started: false,
   level: 1,
   score: 0,
   lives: 3,
@@ -584,6 +660,7 @@ var safeArea = {
   b: 0
 };
 var assets;
+var soundPlayer;
 var sprites = {
   aliens: [],
   cannon: null,
@@ -610,15 +687,20 @@ function preload(onPreloadComplete) {
 
 function init(canvas) {
   canvasForReplay = canvas;
-  setAliens(gs.level);
-  objs.cannon = new _cannon.default(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
 
-  for (var i = 0; i < settings.bunker.amount; i++) {
-    objs.bunkers.push(new _bunker.default(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker));
+  if (gs.started) {
+    setAliens(gs.level);
+    objs.cannon = new _cannon.default(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
+
+    for (var i = 0; i < settings.bunker.amount; i++) {
+      objs.bunkers.push(new _bunker.default(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker));
+    }
+
+    gs.timer = setTimeout(timer_tictoc, 1000);
+    setTimerMoving();
+    soundPlayer = new _sounds.default();
+    soundPlayer.playBackground();
   }
-
-  gs.timer = setTimeout(timer_tictoc, 1000);
-  setTimerMoving();
 }
 
 function setTimerMoving() {
@@ -641,37 +723,51 @@ function timer_tictoc() {
 }
 
 function update(time) {
-  if (gs.lives > 0) {
-    // Left
-    var potentialX = objs.cannon.x - settings.cannon.step;
+  if (gs.started) {
+    if (gs.lives > 0) {
+      // Left
+      var potentialX = objs.cannon.x - settings.cannon.step;
 
-    if (inputHandler.isDown(37) && potentialX >= safeArea.l) {
-      objs.cannon.x = potentialX;
-    } // Right
-
-
-    potentialX = objs.cannon.x + settings.cannon.step;
-
-    if (inputHandler.isDown(39) && potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l) {
-      objs.cannon.x = potentialX;
-    } // Space
+      if (inputHandler.isDown(37) && potentialX >= safeArea.l) {
+        objs.cannon.x = potentialX;
+      } // Right
 
 
-    if (inputHandler.isPressed(32)) {
-      var bulletX = objs.cannon.x + Math.floor(objs.cannon._sprite.h / 2);
-      var bulletY = objs.cannon.y;
-      var bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2);
-      objs.bullets.push(new _bullet.default(bulletX, bulletY, 0, bulletVy, 4, 8, "green"));
-    }
+      potentialX = objs.cannon.x + settings.cannon.step;
 
-    objs.bullets.forEach(function (b) {
-      return b.update(time);
-    });
-    checkBulletIntersection();
-    checkAreBulletsInSafeArea();
+      if (inputHandler.isDown(39) && potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l) {
+        objs.cannon.x = potentialX;
+      } // Space
 
-    if (!isAnyAliveAliens()) {
-      goToNextLevel();
+
+      if (inputHandler.isPressed(32)) {
+        var bulletX = objs.cannon.x + Math.floor(objs.cannon._sprite.h / 2);
+        var bulletY = objs.cannon.y;
+        var bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2);
+        objs.bullets.push(new _bullet.default(bulletX, bulletY, 0, bulletVy, 4, 8, "green"));
+        soundPlayer.playCannonShoot();
+      }
+
+      objs.bullets.forEach(function (b) {
+        return b.update(time);
+      });
+      checkBulletIntersection();
+      checkAreBulletsInSafeArea();
+
+      if (!isAnyAliveAliens()) {
+        goToNextLevel();
+      }
+    } else if (inputHandler.isPressed(32)) {
+      // replay
+      objs.cannon = null;
+      objs.bullets = [];
+      objs.aliens = [];
+      objs.bunkers = [];
+      gs.lives = 3;
+      gs.score = 0;
+      gs.level = 1;
+      gs.seconds.aShoot = 0;
+      init(canvasForReplay);
     }
   } else if (inputHandler.isPressed(32)) {
     // replay
@@ -683,6 +779,7 @@ function update(time) {
     gs.score = 0;
     gs.level = 1;
     gs.seconds.aShoot = 0;
+    gs.started = true;
     init(canvasForReplay);
   }
 }
@@ -970,6 +1067,7 @@ function killAlien(index) {
     gs.score += gs.level;
     objs.aliens[index].blinkTime = 100;
     setTimeout(makeAlienIsNotAlive, settings.alien.aliveAfterKilling, index);
+    soundPlayer.playAlienDead();
   }
 }
 
@@ -1048,6 +1146,9 @@ function killCannon() {
 
   if (gs.lives <= 0) {
     stopGame();
+    soundPlayer.playGameOver();
+  } else {
+    soundPlayer.playCannonDead();
   }
 }
 
@@ -1089,10 +1190,9 @@ function drawBackground(ctx, w, h) {
 
   for (var i = 1; i <= objs.bunkers.length; i++) {
     objs.bunkers[i - 1].x = i * Math.floor(safeArea.r / (settings.bunker.amount + 1));
-  }
-
-  showSafeAreaZone(ctx); // debug
+  } //showSafeAreaZone(ctx) // debug
   // text settings
+
 
   ctx.font = "30px Verdana";
   ctx.fillStyle = "green";
@@ -1148,27 +1248,50 @@ function drawNextLevel(ctx, w, h) {
   ctx.fillText("you are not bad", w / 2, sqrHPart * 3 + settings.lineW + 80 * 2);
 }
 
+function drawStartGame(ctx, w, h) {
+  var sqrWPart = Math.floor(w / 10);
+  var sqrHPart = Math.floor(h / 10);
+  ctx.clearRect(sqrWPart * 2, sqrHPart * 3, sqrWPart * 6, sqrHPart * 4);
+  ctx.beginPath();
+  ctx.lineWidth = settings.lineW;
+  ctx.strokeStyle = "green";
+  ctx.strokeRect(sqrWPart * 2, sqrHPart * 3, sqrWPart * 6, sqrHPart * 3);
+  ctx.closePath();
+  ctx.font = "30px Verdana";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "center";
+  ctx.strokeStyle = "white";
+  ctx.fillText("SPACE INVADERS", w / 2, sqrHPart * 3 + settings.lineW + 80);
+  ctx.font = "15px Verdana";
+  ctx.fillText("tap space to play", w / 2, sqrHPart * 3 + settings.lineW + 80 * 2);
+}
+
 function draw(canvas, time) {
   var ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackground(ctx, canvas.width, canvas.height);
-  objs.aliens.forEach(function (a) {
-    return a.draw(ctx, time);
-  });
-  objs.cannon.draw(ctx);
-  objs.bullets.forEach(function (b) {
-    return b.draw(ctx);
-  });
-  objs.bunkers.forEach(function (b) {
-    return b.draw(ctx);
-  });
 
-  if (gs.lives <= 0) {
-    drawGameOver(ctx, canvas.width, canvas.height);
-  }
+  if (gs.started) {
+    objs.aliens.forEach(function (a) {
+      return a.draw(ctx, time);
+    });
+    objs.cannon.draw(ctx);
+    objs.bullets.forEach(function (b) {
+      return b.draw(ctx);
+    });
+    objs.bunkers.forEach(function (b) {
+      return b.draw(ctx);
+    });
 
-  if (gs.goToNextLevel) {
-    drawNextLevel(ctx, canvas.width, canvas.height);
+    if (gs.lives <= 0) {
+      drawGameOver(ctx, canvas.width, canvas.height);
+    }
+
+    if (gs.goToNextLevel) {
+      drawNextLevel(ctx, canvas.width, canvas.height);
+    }
+  } else {
+    drawStartGame(ctx, canvas.width, canvas.height);
   }
 }
 
@@ -1205,7 +1328,7 @@ function alienMakeShoot(ind) {
     objs.bullets.push(new _bullet.default(bulletX, bulletY, bulletVx, bulletVy, 4, 8, "white"));
   }
 }
-},{"./sprite":"src/sprite.js","./cannon":"src/cannon.js","./bunker":"src/bunker.js","./bullet":"src/bullet.js","./alien":"src/alien.js","./input-handler":"src/input-handler.js","../assets/invaders.png":"assets/invaders.png"}],"src/index.js":[function(require,module,exports) {
+},{"./sprite":"src/sprite.js","./cannon":"src/cannon.js","./bunker":"src/bunker.js","./bullet":"src/bullet.js","./alien":"src/alien.js","./input-handler":"src/input-handler.js","../assets/invaders.png":"assets/invaders.png","./sounds":"src/sounds.js"}],"src/index.js":[function(require,module,exports) {
 "use strict";
 
 var _game = require("./game");
@@ -1279,7 +1402,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "3993" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "18287" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};

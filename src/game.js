@@ -6,6 +6,7 @@ import Alien from './alien'
 import InputHandler from './input-handler'
 
 import assetPath from '../assets/invaders.png'
+import Sounds from './sounds'
 
 let canvasForReplay;
 
@@ -13,6 +14,7 @@ let gs = { // game state. Dont change! It isn't a settings!
     seconds:{
         aShoot: 0,
     },
+    started: false,
     level: 1,
     score: 0,
     lives: 3,
@@ -54,7 +56,7 @@ let settings = {
     bunker:{
         amount: 4,
         distanceFromCannon: 50,
-    }
+    },
 }
 
 let safeArea = { // will be set after
@@ -65,6 +67,7 @@ let safeArea = { // will be set after
 }
 
 let assets;
+let soundPlayer;
 
 const sprites = {
   aliens: [],
@@ -99,19 +102,23 @@ export function preload(onPreloadComplete)
 
 export function init(canvas)
 {
-
     canvasForReplay = canvas
-    setAliens(gs.level)
-
-    objs.cannon = new Cannon(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
-
-	for(let i = 0; i < settings.bunker.amount; i++)
+    if(gs.started)
     {
-        objs.bunkers.push(new Bunker(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker))
-    }
+        setAliens(gs.level)
 
-    gs.timer = setTimeout(timer_tictoc, 1000);
-    setTimerMoving();
+        objs.cannon = new Cannon(100, canvas.height - settings.footerSize - sprites.cannon.h - Math.floor(settings.lineW / 2), sprites.cannon);
+
+        for(let i = 0; i < settings.bunker.amount; i++)
+        {
+            objs.bunkers.push(new Bunker(100, canvas.height - settings.footerSize - sprites.bunker.h - Math.floor(settings.lineW / 2) - settings.bunker.distanceFromCannon, sprites.bunker))
+        }
+
+        gs.timer = setTimeout(timer_tictoc, 1000);
+        setTimerMoving();
+        soundPlayer = new Sounds()
+        soundPlayer.playBackground()
+    }
 }
 
 function setTimerMoving()
@@ -136,39 +143,57 @@ function timer_tictoc()
 
 export function update(time)
 {
-    if(gs.lives > 0)
+    if(gs.started)
     {
-        // Left
-        let potentialX = objs.cannon.x - settings.cannon.step
-        if (inputHandler.isDown(37) &&
-            potentialX >= safeArea.l)
+        if(gs.lives > 0)
         {
-            objs.cannon.x = potentialX;
-        }
+            // Left
+            let potentialX = objs.cannon.x - settings.cannon.step
+            if (inputHandler.isDown(37) &&
+                potentialX >= safeArea.l)
+            {
+                objs.cannon.x = potentialX;
+            }
 
-        // Right
-        potentialX = objs.cannon.x + settings.cannon.step
-        if (inputHandler.isDown(39) &&
-            potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l)
-        {
-            objs.cannon.x = potentialX;
-        }
+            // Right
+            potentialX = objs.cannon.x + settings.cannon.step
+            if (inputHandler.isDown(39) &&
+                potentialX + Math.floor(objs.cannon._sprite.w / 2) <= safeArea.r - safeArea.l)
+            {
+                objs.cannon.x = potentialX;
+            }
 
-        // Space
-        if (inputHandler.isPressed(32))
-        {
-            const bulletX = objs.cannon.x + Math.floor(objs.cannon._sprite.h / 2);
-            const bulletY = objs.cannon.y;
-            const bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2)
-            objs.bullets.push(new Bullet(bulletX, bulletY, 0, bulletVy, 4, 8, "green"));
-        }
+            // Space
+            if (inputHandler.isPressed(32))
+            {
+                const bulletX = objs.cannon.x + Math.floor(objs.cannon._sprite.h / 2);
+                const bulletY = objs.cannon.y;
+                const bulletVy = -1 * settings.cannon.baseBulletSpeed * (1 - settings.cannon.bulletSpeedProbabilityRange + Math.random() * settings.cannon.bulletSpeedProbabilityRange * 2)
+                objs.bullets.push(new Bullet(bulletX, bulletY, 0, bulletVy, 4, 8, "green"));
+                soundPlayer.playCannonShoot()
+            }
 
-        objs.bullets.forEach(b => b.update(time));
-        checkBulletIntersection()
-        checkAreBulletsInSafeArea()
-        if(!isAnyAliveAliens())
+            objs.bullets.forEach(b => b.update(time));
+            checkBulletIntersection()
+            checkAreBulletsInSafeArea()
+            if(!isAnyAliveAliens())
+            {
+                goToNextLevel()
+            }
+        }
+        else if (inputHandler.isPressed(32))
         {
-            goToNextLevel()
+            // replay
+            objs.cannon = null
+            objs.bullets = []
+            objs.aliens = []
+            objs.bunkers = []
+            gs.lives = 3
+            gs.score = 0
+            gs.level = 1
+            gs.seconds.aShoot = 0
+
+            init(canvasForReplay)
         }
     }
     else if (inputHandler.isPressed(32))
@@ -182,7 +207,7 @@ export function update(time)
         gs.score = 0
         gs.level = 1
         gs.seconds.aShoot = 0
-
+        gs.started  = true
         init(canvasForReplay)
     }
 }
@@ -489,6 +514,7 @@ function killAlien(index)
         gs.score += gs.level
         objs.aliens[index].blinkTime = 100
         setTimeout(makeAlienIsNotAlive, settings.alien.aliveAfterKilling, index)
+        soundPlayer.playAlienDead()
     }
 }
 
@@ -581,6 +607,11 @@ function killCannon()
     if(gs.lives <= 0)
     {
         stopGame()
+        soundPlayer.playGameOver()
+    }
+    else
+    {
+        soundPlayer.playCannonDead()
     }
 }
 
@@ -631,7 +662,7 @@ function drawBackground(ctx, w, h)
         objs.bunkers[i - 1].x = i * Math.floor(safeArea.r / (settings.bunker.amount + 1))
     }
 
-    showSafeAreaZone(ctx) // debug
+    //showSafeAreaZone(ctx) // debug
 
     // text settings
     ctx.font = "30px Verdana";
@@ -696,22 +727,51 @@ function drawNextLevel(ctx, w, h)
     ctx.fillText("you are not bad", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
 }
 
+function drawStartGame(ctx, w, h)
+{
+    const sqrWPart = Math.floor(w / 10)
+    const sqrHPart = Math.floor(h / 10)
+
+    ctx.clearRect(sqrWPart*2, sqrHPart*3, sqrWPart*6, sqrHPart*4);
+    ctx.beginPath();
+    ctx.lineWidth = settings.lineW;
+    ctx.strokeStyle = "green"
+    ctx.strokeRect(sqrWPart*2, sqrHPart*3, sqrWPart*6, sqrHPart*3);
+    ctx.closePath();
+
+    ctx.font = "30px Verdana";
+    ctx.textBaseline="top";
+    ctx.textAlign = "center";
+    ctx.strokeStyle = "white"
+    ctx.fillText("SPACE INVADERS", w / 2, sqrHPart*3 + settings.lineW + 80);
+
+    ctx.font = "15px Verdana";
+    ctx.fillText("tap space to play", w / 2, sqrHPart*3 + settings.lineW + 80 * 2);
+}
+
 export function draw(canvas, time) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     drawBackground(ctx, canvas.width, canvas.height);
-    objs.aliens.forEach(a => a.draw(ctx, time));
-    objs.cannon.draw(ctx);
-    objs.bullets.forEach(b => b.draw(ctx));
-    objs.bunkers.forEach(b => b.draw(ctx));
-    if(gs.lives <= 0)
+    if(gs.started)
     {
-        drawGameOver(ctx, canvas.width, canvas.height)
+        objs.aliens.forEach(a => a.draw(ctx, time));
+        objs.cannon.draw(ctx);
+        objs.bullets.forEach(b => b.draw(ctx));
+        objs.bunkers.forEach(b => b.draw(ctx));
+        if(gs.lives <= 0)
+        {
+            drawGameOver(ctx, canvas.width, canvas.height)
+        }
+        if(gs.goToNextLevel)
+        {
+            drawNextLevel(ctx, canvas.width, canvas.height)
+        }
     }
-    if(gs.goToNextLevel)
+    else
     {
-        drawNextLevel(ctx, canvas.width, canvas.height)
+        drawStartGame(ctx, canvas.width, canvas.height)
     }
 }
 
